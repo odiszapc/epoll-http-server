@@ -14,16 +14,36 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <vector>
 
+#define WORKERS_NUM 4
 
 using namespace std;
+
+struct worker_ctx;
 
 struct server_ctx {
     string host;
     string port;
     string directory;
-    int workers;
+    int workers_num;
+    int socket_fd;
+    vector<worker_ctx> workers;
+
+//    server_ctx():host(), port(), directory(), workers() {
+//
+//    }
 };
+
+struct worker_ctx {
+    server_ctx *server;
+    int id;
+    int epoll_fd;
+};
+
+void worker_func() {
+
+}
 
 int make_socket_non_blocking(int sfd) {
     int flags, s;
@@ -49,7 +69,6 @@ int make_socket_non_blocking(int sfd) {
  */
 static int create_and_bind(const string &port, const string &ip) {
     int r;
-
     struct addrinfo hints;
     struct addrinfo *result, *rp;
     int s, sfd;
@@ -94,9 +113,11 @@ static int create_and_bind(const string &port, const string &ip) {
  */
 int main(int argc, char *argv[]) {
     int rez = 0;
-    int sfd, s;
+    int sfd, s, efd;
 
-    server_ctx ctx;
+    //server_ctx *server = (server_ctx *) malloc(sizeof(server_ctx));
+    server_ctx *server = new server_ctx();
+    server->workers_num = WORKERS_NUM;
 
     //std::string host;
     bool host_arg = false;
@@ -108,15 +129,15 @@ int main(int argc, char *argv[]) {
     while ((rez = getopt(argc, argv, "h:p:d:")) != -1) {
         switch (rez) {
             case 'h':
-                ctx.host = std::string(optarg);
+                server->host = std::string(optarg);
                 host_arg = true;
                 break;
             case 'p':
-                ctx.port = std::string(optarg);
+                server->port = std::string(optarg);
                 port_arg = true;
                 break;
             case 'd':
-                ctx.directory = std::string(optarg);
+                server->directory = std::string(optarg);
                 directory_arg = true;
                 break;
         }
@@ -128,15 +149,17 @@ int main(int argc, char *argv[]) {
     }
 
     printf("host = %s, port = %s, directory = '%s'\n",
-           ctx.host.c_str(), ctx.port.c_str(), ctx.directory.c_str());
+           server->host.c_str(), server->port.c_str(), server->directory.c_str());
 
     // Daemonize
 
     // bind port
-    sfd = create_and_bind(ctx.port, ctx.host);
+    sfd = create_and_bind(server->port, server->host);
     if (-1 == sfd) {
         abort();
     }
+
+    server->socket_fd = sfd;
 
     /* Set non-blocking mode */
     s = make_socket_non_blocking(sfd);
@@ -154,6 +177,20 @@ int main(int argc, char *argv[]) {
 
 
     // start workers
+    for (int i = 0; i < server->workers_num; ++i) {
+        worker_ctx *worker = new worker_ctx();
+        //memset(worker, 0, sizeof(worker));
+        worker->server = server;
+        efd = epoll_create1(0);
+        if (efd == -1) {
+            perror("epoll_create");
+            abort();
+        }
+        worker->epoll_fd = efd;
+        worker->id = i;
+        printf("worker #%d ready\n", worker->id);
+        //thread
+    }
 
     return 0;
 }
