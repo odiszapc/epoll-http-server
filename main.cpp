@@ -28,7 +28,7 @@ struct server_ctx {
     string directory;
     int workers_num;
     int socket_fd;
-    vector<worker_ctx> workers;
+    vector<worker_ctx*> workers;
 
 //    server_ctx():host(), port(), directory(), workers() {
 //
@@ -117,7 +117,6 @@ int main(int argc, char *argv[]) {
 
     //server_ctx *server = (server_ctx *) malloc(sizeof(server_ctx));
     server_ctx *server = new server_ctx();
-    server->workers_num = WORKERS_NUM;
 
     //std::string host;
     bool host_arg = false;
@@ -175,12 +174,12 @@ int main(int argc, char *argv[]) {
     }
 
 
-
+    server->workers_num = WORKERS_NUM;
     // start workers
     for (int i = 0; i < server->workers_num; ++i) {
         worker_ctx *worker = new worker_ctx();
-        //memset(worker, 0, sizeof(worker));
         worker->server = server;
+
         efd = epoll_create1(0);
         if (efd == -1) {
             perror("epoll_create");
@@ -189,8 +188,12 @@ int main(int argc, char *argv[]) {
         worker->epoll_fd = efd;
         worker->id = i;
         printf("worker #%d ready\n", worker->id);
+        server->workers.push_back(worker);
         //thread
     }
 
+
+    sleep(1000000);
+    delete server;
     return 0;
 }
