@@ -13,12 +13,19 @@
 
 #include <iostream>
 #include <string>
+#include <thread>
 
 
 using namespace std;
 
-int
-make_socket_non_blocking(int sfd) {
+struct server_ctx {
+    string host;
+    string port;
+    string directory;
+    int workers;
+};
+
+int make_socket_non_blocking(int sfd) {
     int flags, s;
 
     flags = fcntl(sfd, F_GETFL, 0);
@@ -89,25 +96,27 @@ int main(int argc, char *argv[]) {
     int rez = 0;
     int sfd, s;
 
-    std::string host;
+    server_ctx ctx;
+
+    //std::string host;
     bool host_arg = false;
-    std::string port;
+    //std::string port;
     bool port_arg = false;
-    std::string directory;
+    //std::string directory;
     bool directory_arg = false;
 
     while ((rez = getopt(argc, argv, "h:p:d:")) != -1) {
         switch (rez) {
             case 'h':
-                host = std::string(optarg);
+                ctx.host = std::string(optarg);
                 host_arg = true;
                 break;
             case 'p':
-                port = std::string(optarg);
+                ctx.port = std::string(optarg);
                 port_arg = true;
                 break;
             case 'd':
-                directory = std::string(optarg);
+                ctx.directory = std::string(optarg);
                 directory_arg = true;
                 break;
         }
@@ -118,16 +127,18 @@ int main(int argc, char *argv[]) {
         abort();
     }
 
-    printf("host = %s, port = %s, directory = '%s'\n", host.c_str(), port.c_str(), directory.c_str());
+    printf("host = %s, port = %s, directory = '%s'\n",
+           ctx.host.c_str(), ctx.port.c_str(), ctx.directory.c_str());
 
     // Daemonize
 
     // bind port
-    sfd = create_and_bind(port, host);
+    sfd = create_and_bind(ctx.port, ctx.host);
     if (-1 == sfd) {
         abort();
     }
 
+    /* Set non-blocking mode */
     s = make_socket_non_blocking(sfd);
     if (s == -1) {
         abort();
@@ -140,7 +151,7 @@ int main(int argc, char *argv[]) {
         abort();
     }
 
-    sleep(100000);
+
 
     // start workers
 
