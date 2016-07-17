@@ -7,8 +7,6 @@
 
 using namespace std;
 
-
-
 /**
  * Bind socket
  */
@@ -58,9 +56,6 @@ static int create_and_bind(const string &port, const string &ip) {
 
     return sfd;
 }
-
-
-
 
 /**
  * Main func
@@ -123,6 +118,9 @@ int main(int argc, char *argv[]) {
     }
 
     /* Setup parser callbacks */
+
+
+    server->parser_settings = (http_parser_settings *) calloc(0, sizeof(server->parser_settings));
     server->parser_settings->on_header_field = http_request_on_header_field;
     server->parser_settings->on_header_value = http_request_on_header_value;
     server->parser_settings->on_headers_complete = http_request_on_headers_complete;
@@ -162,7 +160,6 @@ int main(int argc, char *argv[]) {
             fprintf(stdout, "Worker #%d crashed\n", worker->worker_id);
         }
     }
-
 
     for (auto worker : server->workers) {
         delete worker;
