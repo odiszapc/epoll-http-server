@@ -20,3 +20,5 @@ struct worker_ctx {
 void worker_func(worker_ctx *ctx);
 static int data_received(worker_ctx *ctx, int remote_socket_fd, char *buf, size_t nread);
 static int on_new_connection(worker_ctx *worker, int remote_socket_fd, char string1[]);
+static http_connection *find_connection(worker_ctx *ctx, int remote_socket_fd);
+static void on_disconnect(worker_ctx *worker, int remote_socket_fd);
