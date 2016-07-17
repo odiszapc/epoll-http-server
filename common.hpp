@@ -73,5 +73,12 @@ static inline int make_socket_non_blocking(int sfd) {
 
 inline bool file_exists (const std::string& name) {
     struct stat buffer;
-    return (stat (name.c_str(), &buffer) == 0);
+    if (stat (name.c_str(), &buffer) != 0) {
+        return false;
+    }
+
+    struct stat path_stat;
+    stat(name.c_str(), &path_stat);
+    return S_ISREG(path_stat.st_mode);
+
 }
