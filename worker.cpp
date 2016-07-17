@@ -194,14 +194,8 @@ static int data_received(worker_ctx *worker, int remote_socket_fd, char *buf, si
                         nread);
 
     int ret = write(1, (const char *) buf, nread);
+    log(buf, nread);
 
-    FILE *fin;
-    if ((fin = fopen("/home/box/final.log", "a+")) == NULL) {
-        perror("!!! Fail to open file");
-        return 1;
-    }
-    fwrite(buf, 1, nread, fin);
-    fclose(fin);
 
 
     return 1; // 1 means close connection

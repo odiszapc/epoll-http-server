@@ -19,6 +19,7 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <mutex>
 
 #include "http_parser.h"
 
@@ -32,6 +33,21 @@ static http_parser_settings parser_settings;
 #define SETSTRING(s,val) s.value=val; s.length=STRLENOF(val)
 #define APPENDSTRING(s,val) memcpy((char*)s->value + s->length, val, STRLENOF(val)); s->length+=STRLENOF(val)
 
+static std::mutex mtx;
+
+static inline int log(char *buf, size_t nread) {
+    std::lock_guard<std::mutex> lck (mtx);
+
+    FILE* out;
+    if ((out = fopen("/tmp/final.log", "a+")) == NULL) {
+        perror("!!! Fail to open file");
+        return 1;
+    }
+
+    size_t written = fwrite(buf, 1, nread, out);
+    fprintf(stdout, "written to log: %d bytes\n", written);
+    fclose(out);
+}
 
 /**
  * Set socket to Non-blocking mode

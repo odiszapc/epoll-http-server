@@ -58,11 +58,17 @@ static int create_and_bind(const string &port, const string &ip) {
     return sfd;
 }
 
+
+
 /**
  * Main func
  * /home/box/final/final -h <ip> -p <port> -d <directory>
  */
 int main(int argc, char *argv[]) {
+
+
+
+
     int rez = 0;
     int server_fd, s, efd;
 
@@ -109,11 +115,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    pid_t pid = fork();
-    if (pid < 0)
-        exit(1);
-    if (pid > 0)
-        exit(EXIT_SUCCESS);
+//    pid_t pid = fork();
+//    if (pid < 0)
+//        exit(1);
+//    if (pid > 0)
+//        exit(EXIT_SUCCESS);
 
 
     server->socket_fd = server_fd;
@@ -184,5 +190,6 @@ int main(int argc, char *argv[]) {
 
     close(server->socket_fd);
     delete server;
+
     return 0;
 }
