@@ -102,13 +102,19 @@ int main(int argc, char *argv[]) {
     printf("host = %s, port = %s, directory = '%s', workers = %d\n",
            server->host.c_str(), server->port.c_str(), server->directory.c_str(), server->workers_num);
 
-    // Daemonize
 
     // bind port
     server_fd = create_and_bind(server->port, server->host);
     if (-1 == server_fd) {
         return 1;
     }
+
+    pid_t pid = fork();
+    if (pid < 0)
+        exit(1);
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
+
 
     server->socket_fd = server_fd;
 
@@ -124,12 +130,13 @@ int main(int argc, char *argv[]) {
 
     //server->parser_settings = (http_parser_settings *) calloc(0, sizeof(http_parser_settings));
     //server->parser_settings = new http_parser_settings();
-    server->parser_settings.on_header_field = http_request_on_header_field;
-    server->parser_settings.on_header_value = http_request_on_header_value;
-    server->parser_settings.on_headers_complete = http_request_on_headers_complete;
-    server->parser_settings.on_body = http_request_on_body;
-    server->parser_settings.on_message_begin = http_request_on_message_begin;
-    server->parser_settings.on_message_complete = http_request_on_message_complete;
+
+//    server->parser_settings.on_header_field = http_request_on_header_field;
+//    server->parser_settings.on_header_value = http_request_on_header_value;
+//    server->parser_settings.on_headers_complete = http_request_on_headers_complete;
+//    server->parser_settings.on_body = http_request_on_body;
+//    server->parser_settings.on_message_begin = http_request_on_message_begin;
+//    server->parser_settings.on_message_complete = http_request_on_message_complete;
     server->parser_settings.on_url = http_request_on_url;
 
 

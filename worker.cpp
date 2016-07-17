@@ -130,9 +130,10 @@ void worker_func(worker_ctx *ctx) {
                     done = data_received(ctx, events[i].data.fd, buf, bytes_received);
                 }
 
-                if (done) {
+                if (done || find_connection(ctx, events[i].data.fd)->state == http_connection::CLOSING) {
                     fprintf(stdout, "[]: Closed connection on descriptor %d\n\n", events[i].data.fd);
 
+                    ret = epoll_ctl(ctx->epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, &event);
                     /* Closing the descriptor will make epoll remove it for the monitoring set */
                     close(events[i].data.fd);
                     on_disconnect(ctx, events[i].data.fd);
@@ -144,13 +145,18 @@ void worker_func(worker_ctx *ctx) {
     free(events);
 }
 
+static http_parser _parser;
+
 static int on_new_connection(worker_ctx *worker, int remote_socket_fd, char *ip) {
     http_connection *conn = new http_connection();
     conn->worker = worker;
     conn->fd = remote_socket_fd;
     conn->keepalive = 0;
     conn->remote_ip = std::string(ip);
+    conn->state = http_connection::OPEN;
+
     http_parser_init(&conn->http_req_parser, HTTP_REQUEST);
+    http_parser_init(&_parser, HTTP_REQUEST);
 
     // Link to connection
     conn->http_req_parser.data = conn;
@@ -168,6 +174,8 @@ static void on_disconnect(worker_ctx *worker, int remote_socket_fd) {
         return;
     }
 
+    worker->connection_map.erase(remote_socket_fd);
+
     fprintf(stdout, "[]: Client '%s' disconnected\n\n", conn->remote_ip.c_str());
 }
 
@@ -181,20 +189,13 @@ static int data_received(worker_ctx *worker, int remote_socket_fd, char *buf, si
     }
 
     fprintf(stdout, "[]: Read %d bytes from %s\n\n", nread, conn->remote_ip.c_str());
-    if (worker->server->parser_settings.on_header_field == http_request_on_header_field) {
-        printf("########## OK\n");
-    }
 
-    const http_parser_settings * p = (const http_parser_settings*) &worker->server->parser_settings;
+    http_parser_execute((http_parser *) &conn->http_req_parser, &worker->server->parser_settings, (const char *) buf,nread);
 
-    http_parser_execute((http_parser*)&conn->http_req_parser, &worker->server->parser_settings, (const char *) buf, nread);
+    int ret = write(1, (const char *) buf, nread);
 
 
-    int ret = write(1, buf, nread);
 
-
-    send(conn->fd, "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
-    send(conn->fd, "ABCDEFG\n123", 11, 0);
 
     return 1; // 1 means close connection
 }

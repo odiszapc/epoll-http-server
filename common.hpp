@@ -29,6 +29,8 @@ struct worker_ctx;
 struct server_ctx;
 static http_parser_settings parser_settings;
 
+#define SETSTRING(s,val) s.value=val; s.length=STRLENOF(val)
+#define APPENDSTRING(s,val) memcpy((char*)s->value + s->length, val, STRLENOF(val)); s->length+=STRLENOF(val)
 
 
 /**
@@ -51,4 +53,9 @@ static inline int make_socket_non_blocking(int sfd) {
     }
 
     return 0;
+}
+
+inline bool file_exists (const std::string& name) {
+    struct stat buffer;
+    return (stat (name.c_str(), &buffer) == 0);
 }
