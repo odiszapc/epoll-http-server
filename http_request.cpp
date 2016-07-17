@@ -49,24 +49,19 @@ int http_request_on_url(http_parser *parser, const char *at, size_t length) {
         dir.erase(dir.length() - 1, dir.length());
     }
 
+    size_t index = uri.find('?',0);
+    if (index != string::npos) {
+        uri = uri.substr(0, index);
+    }
+
 
     std::string path = dir + uri;
 
     printf("Full path: '%s'\n", path.c_str());
 
     // Check if file exists
-
-    //char buf[512];
-    //char i=0;
     int ret;
     if (file_exists(path)) {
-//        strcpy("HTTP/1.1 200 OK\r\n", buf+i);
-//        i+=19;
-//        strcpy("Content-Type: text/html;\r\n", buf+i);
-//        i+=28;
-//
-//        char* bin_buf
-
         #define HTTP_OK "HTTP/1.1 200 OK\r\n"
         #define CONTENT_TYPE "Content-Type: text/html\r\n"
         #define CONNECTION_CLOSE "Connection: close\r\n\r\n"
@@ -76,13 +71,11 @@ int http_request_on_url(http_parser *parser, const char *at, size_t length) {
             printf("[]: EAGAIN\n");
         }
 
-        //usleep(10000);
         ret = send(conn->fd, CONTENT_TYPE, strlen(CONTENT_TYPE), 0);
         if (EAGAIN == ret) {
             printf("[]: EAGAIN\n");
         }
 
-        //usleep(10000);
         ret = send(conn->fd, CONNECTION_CLOSE, strlen(CONNECTION_CLOSE), 0);
         if (EAGAIN == ret) {
             printf("[]: EAGAIN\n");
