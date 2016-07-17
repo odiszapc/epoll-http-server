@@ -17,6 +17,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <map>
+#include <unordered_map>
 
 #include "http_parser.h"
 
@@ -26,25 +28,6 @@
 struct worker_ctx;
 struct server_ctx;
 
-struct server_ctx {
-    std::string host;
-    std::string port;
-    std::string directory;
-    int workers_num;
-    int socket_fd;
-    std::vector<worker_ctx *> workers;
-    http_parser_settings *parser_settings;
-};
-
-
-struct worker_ctx {
-    server_ctx *server;
-    int worker_id;
-    int epoll_fd;
-    int epoll_max_events;
-    std::thread thread_func;
-    int return_code;
-};
 
 
 /**

@@ -1,4 +1,5 @@
 #include "worker.hpp"
+#include "http_connection.hpp"
 
 /**
  * Worker loop
@@ -98,6 +99,8 @@ void worker_func(worker_ctx *ctx) {
                         ctx->return_code = -1;
                         return;
                     }
+
+                    on_new_connection(ctx, remote_socket_fd);
                 }
             }
 
@@ -144,6 +147,10 @@ void worker_func(worker_ctx *ctx) {
     }
 
     free(events);
+}
+
+static int on_new_connection(worker_ctx *ctx, int remote_socket_fd) {
+    http_connection* conn = new http_connection();
 }
 
 static int data_received(worker_ctx *ctx, int remote_socket_fd, char *buf, size_t nread) {
