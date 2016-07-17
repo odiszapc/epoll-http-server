@@ -1,65 +1,13 @@
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <fcntl.h>
-#include <sys/epoll.h>
-#include <errno.h>
-#include <string.h>
+#include "common.hpp"
 
-#include <iostream>
-#include <string>
-#include <thread>
-#include <vector>
-
-#define WORKERS_NUM 4
-#define EPOLL_MAXEVENTS 64
+#include "http_parser.h"
+#include "http_request.hpp"
+#include "worker.hpp"
+#include "server.hpp"
 
 using namespace std;
 
-struct worker_ctx;
 
-struct server_ctx {
-    string host;
-    string port;
-    string directory;
-    int workers_num;
-    int socket_fd;
-    vector<worker_ctx *> workers;
-};
-
-struct worker_ctx {
-    server_ctx *server;
-    int worker_id;
-    int epoll_fd;
-    int epoll_max_events;
-    std::thread thread_func;
-    int return_code;
-
-};
-
-int make_socket_non_blocking(int sfd) {
-    int flags, s;
-
-    flags = fcntl(sfd, F_GETFL, 0);
-    if (flags == -1) {
-        perror("fcntl");
-        return -1;
-    }
-
-    flags |= O_NONBLOCK;
-    s = fcntl(sfd, F_SETFL, flags);
-    if (s == -1) {
-        perror("fcntl");
-        return -1;
-    }
-
-    return 0;
-}
 
 /**
  * Bind socket
@@ -86,6 +34,13 @@ static int create_and_bind(const string &port, const string &ip) {
         if (-1 == sfd)
             continue;
 
+        /* set SO_REUSEPORT */
+        int enable = 1;
+        if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &enable, sizeof(int)) < 0) {
+            fprintf(stderr, "setsockopt(SO_REUSEADDR | SO_REUSEPORT) failed: %s\n", strerror(errno));
+            return -1;
+        }
+
         s = bind(sfd, rp->ai_addr, rp->ai_addrlen);
         if (0 == s) {
             /* Bind is successful */
@@ -95,7 +50,7 @@ static int create_and_bind(const string &port, const string &ip) {
     }
 
     if (NULL == rp) {
-        fprintf(stderr, "Could not bind\n");
+        fprintf(stderr, "Could not bind: %s\n", strerror(errno));
         return -1;
     }
 
@@ -104,150 +59,8 @@ static int create_and_bind(const string &port, const string &ip) {
     return sfd;
 }
 
-/**
- * Worker loop
- */
-static void worker_func(worker_ctx *ctx) {
-    struct epoll_event event;
-    struct epoll_event *events;
-    int ret;
 
-    fprintf(stdout, "Worker #%d started\n", ctx->worker_id);
 
-    // Init epoll instance
-    ctx->epoll_fd = epoll_create1(0);
-    if (ctx->epoll_fd == -1) {
-        perror("epoll_create");
-        ctx->return_code = -1;
-        return;
-    }
-
-    event.data.fd = ctx->server->socket_fd;
-    event.events = EPOLLIN | EPOLLET;
-    ret = epoll_ctl(ctx->epoll_fd, EPOLL_CTL_ADD, ctx->server->socket_fd, &event);
-    if (ret == -1) {
-        perror("epoll_ctl");
-        ctx->return_code = -1;
-        return;
-    }
-
-    events = (struct epoll_event *) calloc(ctx->epoll_max_events, sizeof(event));
-
-    /* Event loop */
-    int events_received_num, i;
-    while (1) {
-        events_received_num = epoll_wait(ctx->epoll_fd, events, ctx->epoll_max_events, -1);
-        if (-1 == events_received_num) {
-            perror("epoll_wait");
-            ctx->return_code = -1;
-            return;
-        }
-
-        fprintf(stdout, "EPOLL: %d events received\n", events_received_num);
-        for (i = 0; i < events_received_num; i++) {
-            if ((events[i].events & EPOLLERR) ||
-                (events[i].events & EPOLLHUP) ||
-                (!(events[i].events & EPOLLIN))) {
-                /* An error has occured on this fd, or the socket is not
-                   ready for reading (why were we notified then?) */
-                fprintf(stderr, "epoll error\n");
-                close(events[i].data.fd);
-                continue;
-            }
-
-            else if (ctx->server->socket_fd == events[i].data.fd) {
-                /* Notification on server socket, which means new connection occurred */
-                while (1) {
-                    struct sockaddr in_addr;
-                    socklen_t in_len;
-                    int remote_socket_fd;
-                    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-
-                    in_len = sizeof in_addr;
-                    remote_socket_fd = accept(ctx->server->socket_fd, &in_addr, &in_len);
-                    if (remote_socket_fd == -1) {
-                        if ((errno == EAGAIN) ||
-                            (errno == EWOULDBLOCK)) {
-                            /* We have processed all incoming connections. */
-                            break;
-                        }
-                        else {
-                            perror("accept");
-                            break;
-                        }
-                    }
-
-                    ret = getnameinfo(&in_addr, in_len,
-                                      hbuf, sizeof hbuf,
-                                      sbuf, sizeof sbuf,
-                                      NI_NUMERICHOST | NI_NUMERICSERV);
-                    if (0 == ret) {
-                        printf("Accepted connection on descriptor %d "
-                                       "(host=%s, port=%s)\n", remote_socket_fd, hbuf, sbuf);
-                    }
-
-                    /* Make incoming socket non-blocking */
-                    ret = make_socket_non_blocking(remote_socket_fd);
-                    if (-1 == ret) {
-                        ctx->return_code = -1;
-                        return;
-                    }
-
-                    /* Add incoming socket to epoll monitoring */
-                    event.data.fd = remote_socket_fd;
-                    event.events = EPOLLIN | EPOLLET;
-                    ret = epoll_ctl(ctx->epoll_fd, EPOLL_CTL_ADD, remote_socket_fd, &event);
-                    if (-1 == ret) {
-                        perror("epoll_ctl");
-                        ctx->return_code = -1;
-                        return;
-                    }
-                }
-            }
-
-            else {
-                /* Client part.
-                   We have some data on fd to be read. */
-                int done = 0;
-
-                while (1) {
-                    ssize_t bytes_received;
-                    char buf[512];
-                    bytes_received = read(events[i].data.fd, buf, sizeof buf);
-                    if (bytes_received == -1) {
-                        if (errno != EAGAIN) {
-                            perror("read");
-                            done = 1;
-                        }
-                        break;
-                    } else if (0 == bytes_received) {
-                        /* End of file */
-                        done = 1;
-                        break;
-                    }
-
-                    fprintf(stdout, "Received %d bytes\n", bytes_received);
-
-                    ret = write(1, buf, bytes_received);
-                    if (-1 == ret) {
-                        perror("write");
-                        ctx->return_code = -1;
-                        return;
-                    }
-                }
-
-                if (done) {
-                    fprintf(stdout, "Closed connection on descriptor %d\n", events[i].data.fd);
-
-                    /* Closing the descriptor will make epoll remove it for the monitoring set */
-                    close(events[i].data.fd);
-                }
-            }
-        }
-    }
-
-    free(events);
-}
 
 /**
  * Main func
@@ -255,7 +68,7 @@ static void worker_func(worker_ctx *ctx) {
  */
 int main(int argc, char *argv[]) {
     int rez = 0;
-    int sfd, s, efd;
+    int server_fd, s, efd;
 
     //server_ctx *server = (server_ctx *) malloc(sizeof(server_ctx));
     server_ctx *server = new server_ctx();
@@ -296,21 +109,30 @@ int main(int argc, char *argv[]) {
     // Daemonize
 
     // bind port
-    sfd = create_and_bind(server->port, server->host);
-    if (-1 == sfd) {
+    server_fd = create_and_bind(server->port, server->host);
+    if (-1 == server_fd) {
         return 1;
     }
 
-    server->socket_fd = sfd;
+    server->socket_fd = server_fd;
 
     /* Set non-blocking mode */
-    s = make_socket_non_blocking(sfd);
+    s = make_socket_non_blocking(server_fd);
     if (s == -1) {
         return 1;
     }
 
+    /* Setup parser callbacks */
+    server->parser_settings->on_header_field = http_request_on_header_field;
+    server->parser_settings->on_header_value = http_request_on_header_value;
+    server->parser_settings->on_headers_complete = http_request_on_headers_complete;
+    server->parser_settings->on_body = http_request_on_body;
+    server->parser_settings->on_message_begin = http_request_on_message_begin;
+    server->parser_settings->on_message_complete = http_request_on_message_complete;
+    server->parser_settings->on_url = http_request_on_url;
+
     /* Start listening */
-    s = listen(sfd, SOMAXCONN);
+    s = listen(server_fd, SOMAXCONN);
     if (s == -1) {
         perror("listen");
         return 1;
@@ -346,7 +168,7 @@ int main(int argc, char *argv[]) {
         delete worker;
     }
 
-    close (server->socket_fd);
+    close(server->socket_fd);
     delete server;
     return 0;
 }
