@@ -115,11 +115,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-//    pid_t pid = fork();
-//    if (pid < 0)
-//        exit(1);
-//    if (pid > 0)
-//        exit(EXIT_SUCCESS);
+    pid_t pid = fork();
+    if (pid < 0)
+        exit(1);
+    if (pid > 0)
+        exit(EXIT_SUCCESS);
 
 
     server->socket_fd = server_fd;
