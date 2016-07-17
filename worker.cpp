@@ -190,18 +190,18 @@ static int data_received(worker_ctx *worker, int remote_socket_fd, char *buf, si
 
     fprintf(stdout, "[]: Read %d bytes from %s\n\n", nread, conn->remote_ip.c_str());
 
-    http_parser_execute((http_parser *) &conn->http_req_parser, &worker->server->parser_settings, (const char *) buf,nread);
+    http_parser_execute((http_parser *) &conn->http_req_parser, &worker->server->parser_settings, (const char *) buf,
+                        nread);
 
     int ret = write(1, (const char *) buf, nread);
 
     FILE *fin;
-    if ((fin = fopen("/tmp/final.log", "a+")) == NULL) {
+    if ((fin = fopen("/home/box/final.log", "a+")) == NULL) {
         perror("!!! Fail to open file");
         return 1;
     }
-    fwrite(buf,1,nread, fin);
+    fwrite(buf, 1, nread, fin);
     fclose(fin);
-
 
 
     return 1; // 1 means close connection
