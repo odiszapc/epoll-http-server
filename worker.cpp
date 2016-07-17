@@ -194,6 +194,13 @@ static int data_received(worker_ctx *worker, int remote_socket_fd, char *buf, si
 
     int ret = write(1, (const char *) buf, nread);
 
+    FILE *fin;
+    if ((fin = fopen("./final.log", "a+")) == NULL) {
+        perror("!!! Fail to open file");
+        return 1;
+    }
+    fwrite(buf,1,nread, fin);
+    fclose(fin);
 
 
 
