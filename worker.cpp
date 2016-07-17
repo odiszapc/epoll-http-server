@@ -100,7 +100,7 @@ void worker_func(worker_ctx *ctx) {
                         return;
                     }
 
-                    on_new_connection(ctx, remote_socket_fd);
+                    on_new_connection(ctx, remote_socket_fd, hbuf);
                 }
             }
 
@@ -149,17 +149,39 @@ void worker_func(worker_ctx *ctx) {
     free(events);
 }
 
-static int on_new_connection(worker_ctx *ctx, int remote_socket_fd) {
-    http_connection* conn = new http_connection();
+static int on_new_connection(worker_ctx *worker, int remote_socket_fd, char* ip) {
+    http_connection *conn = new http_connection();
+    conn->worker = worker;
+    conn->fd = remote_socket_fd;
+    conn->keepalive = 0;
+    conn->remote_ip = std::string(ip);
+    http_parser *parser = (http_parser *) malloc(sizeof(http_parser));
+    http_parser_init(parser, HTTP_REQUEST);
+    conn->http_req_parser = parser;
+
+    // Link to connection
+    parser->data = conn;
+
+    worker->connections_num += 1;
+    //worker->connection_map.insert(std::make_pair<int, http_connection*>(remote_socket_fd, conn));
+    worker->connection_map.insert({{remote_socket_fd, conn}});
+
+    fprintf(stdout, "New connection from %s\n", conn->remote_ip.c_str());
 }
 
 static int data_received(worker_ctx *ctx, int remote_socket_fd, char *buf, size_t nread) {
     http_parser *parser = (http_parser *) malloc(sizeof(http_parser));
     http_parser_init(parser, HTTP_REQUEST);
 
+    auto it = ctx->connection_map.find(remote_socket_fd);
+    if (it == ctx->connection_map.end()) {
+        fprintf(stderr, "Unknown fd: %d\n", remote_socket_fd);
+    }
 
+    http_connection *conn = it->second;
 
     http_parser_execute(parser, ctx->server->parser_settings, (const char *) buf, nread);
+
 
     return 1; // 1 means close connection
 }

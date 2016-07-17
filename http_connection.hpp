@@ -7,4 +7,5 @@ struct http_connection {
     int fd;
     http_parser *http_req_parser;
     int keepalive;
+    std::string remote_ip;
 };
