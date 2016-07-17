@@ -1,5 +1,6 @@
 #include "worker.hpp"
 #include "http_connection.hpp"
+#include "http_request.hpp"
 
 /**
  * Worker loop
@@ -127,13 +128,6 @@ void worker_func(worker_ctx *ctx) {
 
                     fprintf(stdout, "[]: Received %d bytes\n\n", bytes_received);
                     done = data_received(ctx, events[i].data.fd, buf, bytes_received);
-
-                    ret = write(1, buf, bytes_received);
-                    if (-1 == ret) {
-                        perror("write");
-                        ctx->return_code = -1;
-                        return;
-                    }
                 }
 
                 if (done) {
@@ -156,12 +150,10 @@ static int on_new_connection(worker_ctx *worker, int remote_socket_fd, char *ip)
     conn->fd = remote_socket_fd;
     conn->keepalive = 0;
     conn->remote_ip = std::string(ip);
-    http_parser *parser = (http_parser *) malloc(sizeof(http_parser));
-    http_parser_init(parser, HTTP_REQUEST);
-    conn->http_req_parser = parser;
+    http_parser_init(&conn->http_req_parser, HTTP_REQUEST);
 
     // Link to connection
-    parser->data = conn;
+    conn->http_req_parser.data = conn;
 
     worker->connections_num += 1;
     //worker->connection_map.insert(std::make_pair<int, http_connection*>(remote_socket_fd, conn));
@@ -180,8 +172,8 @@ static void on_disconnect(worker_ctx *worker, int remote_socket_fd) {
 }
 
 static int data_received(worker_ctx *worker, int remote_socket_fd, char *buf, size_t nread) {
-    http_parser *parser = (http_parser *) malloc(sizeof(http_parser));
-    http_parser_init(parser, HTTP_REQUEST);
+    //http_parser *parser = (http_parser *) malloc(sizeof(http_parser));
+    //http_parser_init(parser, HTTP_REQUEST);
 
     const http_connection *conn = find_connection(worker, remote_socket_fd);
     if (NULL == conn) {
@@ -189,8 +181,20 @@ static int data_received(worker_ctx *worker, int remote_socket_fd, char *buf, si
     }
 
     fprintf(stdout, "[]: Read %d bytes from %s\n\n", nread, conn->remote_ip.c_str());
+    if (worker->server->parser_settings.on_header_field == http_request_on_header_field) {
+        printf("########## OK\n");
+    }
 
-    http_parser_execute(parser, worker->server->parser_settings, (const char *) buf, nread);
+    const http_parser_settings * p = (const http_parser_settings*) &worker->server->parser_settings;
+
+    http_parser_execute((http_parser*)&conn->http_req_parser, &worker->server->parser_settings, (const char *) buf, nread);
+
+
+    int ret = write(1, buf, nread);
+
+
+    send(conn->fd, "HTTP/1.1 200 OK\r\n\r\n", 19, 0);
+    send(conn->fd, "ABCDEFG\n123", 11, 0);
 
     return 1; // 1 means close connection
 }

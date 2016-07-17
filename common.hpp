@@ -27,6 +27,7 @@
 
 struct worker_ctx;
 struct server_ctx;
+static http_parser_settings parser_settings;
 
 
 

@@ -11,5 +11,5 @@ struct server_ctx {
     int workers_num;
     int socket_fd;
     std::vector<worker_ctx *> workers;
-    http_parser_settings *parser_settings;
+    http_parser_settings parser_settings;
 };

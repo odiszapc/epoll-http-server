@@ -4,6 +4,7 @@
 #include "http_request.hpp"
 #include "worker.hpp"
 #include "server.hpp"
+#include <signal.h>
 
 using namespace std;
 
@@ -117,17 +118,20 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    signal(SIGPIPE, SIG_IGN);
     /* Setup parser callbacks */
 
 
-    server->parser_settings = (http_parser_settings *) calloc(0, sizeof(server->parser_settings));
-    server->parser_settings->on_header_field = http_request_on_header_field;
-    server->parser_settings->on_header_value = http_request_on_header_value;
-    server->parser_settings->on_headers_complete = http_request_on_headers_complete;
-    server->parser_settings->on_body = http_request_on_body;
-    server->parser_settings->on_message_begin = http_request_on_message_begin;
-    server->parser_settings->on_message_complete = http_request_on_message_complete;
-    server->parser_settings->on_url = http_request_on_url;
+    //server->parser_settings = (http_parser_settings *) calloc(0, sizeof(http_parser_settings));
+    //server->parser_settings = new http_parser_settings();
+    server->parser_settings.on_header_field = http_request_on_header_field;
+    server->parser_settings.on_header_value = http_request_on_header_value;
+    server->parser_settings.on_headers_complete = http_request_on_headers_complete;
+    server->parser_settings.on_body = http_request_on_body;
+    server->parser_settings.on_message_begin = http_request_on_message_begin;
+    server->parser_settings.on_message_complete = http_request_on_message_complete;
+    server->parser_settings.on_url = http_request_on_url;
+
 
     /* Start listening */
     s = listen(server_fd, SOMAXCONN);
@@ -139,8 +143,14 @@ int main(int argc, char *argv[]) {
 
     // start workers
     for (int i = 0; i < server->workers_num; ++i) {
+//        if (server->parser_settings->on_header_field == http_request_on_header_field) {
+//            printf("########## OK\n");
+//        }
+
         worker_ctx *worker = new worker_ctx();
+
         worker->server = server;
+
         worker->epoll_max_events = EPOLL_MAXEVENTS;
         worker->worker_id = i;
         server->workers.push_back(worker);
